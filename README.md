@@ -4,6 +4,32 @@
 
 CUBIC STYLEさんが制作されている、[ラズパイアドバンス拡張ボード](https://cubic-style.jp/rpa_exp/)を使用して、GBのROMを読み出すツールです。  
 
+## ビルド
+
+### Raspberry Pi上でビルド
+
+```sh
+$ git clone https://github.com/mj-hd/gb-reader.git
+$ cd gb-reader
+$ cargo build --release
+```
+
+### クロスコンパイル
+
+[cross](https://github.com/rust-embedded/cross) をインストールします。
+その後、
+
+```sh
+$ git clone https://github.com/mj-hd/gb-reader.git
+$ cd gb-reader
+$ cross build --release --target=<トリプル>
+```
+
+を実行してください。  
+  
+トリプルの例)  
+Raspberry Pi Zero W: `arm-unknown-linux-musleabi`  
+
 ## 使用方法
 
 Raspberry Piの設定から、SPIを有効にしてください。  
