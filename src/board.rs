@@ -28,12 +28,11 @@ enum Pin {
     Addr15 = 21,
 }
 
-const MCP_BASE: u8 = 123;
 const DEV_ID: u8 = 0;
 
+const MCP23X08_IODIR: u8 = 0x00;
 const MCP23X08_IOCON: u8 = 0x05;
 const MCP23X08_GPIO: u8 = 0x09;
-const MCP23X08_OLAT: u8 = 0x0A;
 
 const CS_WAIT: u64 = 3;
 const RD_WAIT: u64 = 4;
@@ -45,10 +44,15 @@ const CMD_READ: u8 = 0x41;
 
 const IOCON_INIT: u8 = 0x20;
 
+#[derive(PartialEq)]
+enum DataDir {
+    Input,
+    Output,
+}
+
 pub struct CubicStyleBoard {
     gpio: Gpio,
     spi: Spi,
-    prev: u8,
 
     rd: OutputPin,
     wr: OutputPin,
@@ -56,6 +60,7 @@ pub struct CubicStyleBoard {
     rst: OutputPin,
 
     addr: [OutputPin; 16],
+    data_dir: DataDir,
 }
 
 impl CubicStyleBoard {
@@ -88,24 +93,26 @@ impl CubicStyleBoard {
         Ok(Self {
             gpio,
             spi: Spi::new(Bus::Spi0, SlaveSelect::Ss1, 4000000, Mode::Mode0)?,
-            prev: 0,
             rd,
             wr,
             cs,
             rst,
             addr,
+            data_dir: DataDir::Input,
         })
     }
 
     pub fn init(&mut self) -> Result<()> {
-        self.write_mcp_byte(MCP23X08_IOCON, IOCON_INIT)?;
-
-        self.prev = self.read_mcp_byte(MCP23X08_OLAT)?;
-
         self.rd.set_high();
         self.wr.set_high();
         self.rst.set_high();
         self.cs.set_high();
+
+        // SEQOPの禁止
+        self.write_mcp_byte(MCP23X08_IOCON, IOCON_INIT)?;
+
+        // DataをINPUTへ設定
+        self.mcp_into_input()?;
 
         Ok(())
     }
@@ -122,17 +129,13 @@ impl CubicStyleBoard {
     }
 
     pub fn read_byte(&mut self) -> Result<u8> {
+        self.mcp_into_input()?;
+
         self.set_write(false);
         self.set_read(true);
         self.set_cs(true);
 
-        let mut data: u8 = 0x00;
-
-        for i in 0..8 {
-            if self.read_mcp_pin(i + MCP_BASE)? {
-                data |= 1 << i;
-            }
-        }
+        let data = self.read_mcp_byte(MCP23X08_GPIO)?;
 
         self.set_read(false);
         self.set_cs(false);
@@ -141,14 +144,12 @@ impl CubicStyleBoard {
     }
 
     pub fn write_byte(&mut self, val: u8) -> Result<()> {
+        self.mcp_into_output()?;
+
         self.set_read(false);
         self.set_cs(true);
 
-        for i in 0..8 {
-            let bit = val & (1 << i) > 0;
-
-            self.write_mcp_pin(i + MCP_BASE, bit)?;
-        }
+        self.write_mcp_byte(MCP23X08_GPIO, val)?;
 
         self.set_write(true);
         self.set_write(false);
@@ -158,6 +159,10 @@ impl CubicStyleBoard {
     }
 
     fn set_write(&mut self, val: bool) {
+        if self.wr.is_set_low() == val {
+            return;
+        }
+
         sleep(Duration::from_micros(WR_WAIT_BEFORE));
 
         if val {
@@ -170,6 +175,10 @@ impl CubicStyleBoard {
     }
 
     fn set_read(&mut self, val: bool) {
+        if self.rd.is_set_low() == val {
+            return;
+        }
+
         if val {
             self.rd.set_low();
         } else {
@@ -180,6 +189,10 @@ impl CubicStyleBoard {
     }
 
     fn set_cs(&mut self, val: bool) {
+        if self.cs.is_set_low() == val {
+            return;
+        }
+
         if val {
             self.cs.set_low();
         } else {
@@ -189,50 +202,45 @@ impl CubicStyleBoard {
         sleep(Duration::from_micros(CS_WAIT));
     }
 
-    fn write_mcp_pin(&mut self, pin: u8, val: bool) -> Result<()> {
-        let bit = 1 << ((pin - MCP_BASE) & 7);
-
-        let mut prev = self.prev;
-
-        if val {
-            prev |= bit;
-        } else {
-            prev &= !bit;
+    fn mcp_into_output(&mut self) -> Result<()> {
+        if self.data_dir != DataDir::Output {
+            self.write_mcp_byte(MCP23X08_IODIR, 0x00)?;
+            self.data_dir = DataDir::Output;
         }
-
-        self.write_mcp_byte(MCP23X08_GPIO, prev)?;
-
-        self.prev = prev;
 
         Ok(())
     }
 
-    fn read_mcp_pin(&mut self, pin: u8) -> Result<bool> {
-        let mask = 1 << ((pin - MCP_BASE) & 7);
-        let val = self.read_mcp_byte(MCP23X08_GPIO)? & mask > 0;
+    fn mcp_into_input(&mut self) -> Result<()> {
+        if self.data_dir != DataDir::Input {
+            self.write_mcp_byte(MCP23X08_IODIR, 0xFF)?;
+            self.data_dir = DataDir::Input;
+        }
 
-        Ok(val)
+        Ok(())
     }
 
     fn write_mcp_byte(&mut self, reg: u8, val: u8) -> Result<()> {
-        let mut data: [u8; 4] = [0; 4];
+        let mut data: [u8; 3] = [0; 3];
+
         data[0] = CMD_WRITE | ((DEV_ID & 7) << 1);
         data[1] = reg;
         data[2] = val;
 
-        self.spi.write(&data[..])?;
+        self.spi.write(&data)?;
 
         Ok(())
     }
 
     fn read_mcp_byte(&mut self, reg: u8) -> Result<u8> {
-        let mut data: [u8; 4] = [0; 4];
+        let mut data: [u8; 3] = [0; 3];
+
         data[0] = CMD_READ | ((DEV_ID & 7) << 1);
         data[1] = reg;
 
-        let mut buffer: [u8; 4] = [0; 4];
+        let mut buffer: [u8; 3] = [0; 3];
 
-        self.spi.transfer(&mut buffer, &data[..])?;
+        self.spi.transfer(&mut buffer, &data)?;
 
         Ok(buffer[2])
     }

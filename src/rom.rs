@@ -6,7 +6,7 @@ use num_traits::FromPrimitive;
 use std::fmt;
 use std::io::{Read, Seek, SeekFrom};
 
-#[derive(FromPrimitive, Debug)]
+#[derive(FromPrimitive, Copy, Clone, Debug)]
 pub enum MbcType {
     RomOnly = 0x00,
     Mbc1 = 0x01,
@@ -22,6 +22,12 @@ pub enum MbcType {
     Mbc3 = 0x11,
     Mbc3Ram = 0x12,
     Mbc3RamBattery = 0x13,
+    Mbc5 = 0x19,
+    Mbc5Ram = 0x1A,
+    Mbc5RamBattery = 0x1B,
+    Mbc5Rumble = 0x1C,
+    Mbc5RumbleRam = 0x1D,
+    Mbc5RumbleRamBattery = 0x1E,
 }
 
 impl Default for MbcType {
@@ -30,7 +36,7 @@ impl Default for MbcType {
     }
 }
 
-#[derive(FromPrimitive, Debug)]
+#[derive(FromPrimitive, Copy, Clone, Debug)]
 pub enum DestinationCode {
     Japanese = 0x00,
     NonJapanese = 0x01,
@@ -43,6 +49,7 @@ impl Default for DestinationCode {
     }
 }
 
+#[derive(Copy, Clone)]
 pub struct RomHeader {
     pub entry_point: [u8; 4],
     pub logo: [u8; 0x0030],

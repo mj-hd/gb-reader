@@ -4,17 +4,17 @@ CUBIC STYLEさんが制作されている、[ラズパイアドバンス拡張�
 
 ## 使用方法
 
-Raspberry PIの設定から、SPIを有効にしてください。  
+Raspberry Piの設定から、SPIを有効にしてください。  
 その後、以下のコマンドを打つことでROMの読み出しが開始します。  
 
 ```sh
 $ gb-reader read --output ファイル名.gb
 ```
 
-## TODO
+## 対応MBC
 
-- [x] RomOnly
-- [-] MBC1
-- [ ] MBC2
-- [ ] MBC3
-- [ ] MBC5
+- RomOnly
+- MBC1
+- MBC2(動作未検証)
+- MBC3(動作未検証)
+- MBC5(動作未検証)
