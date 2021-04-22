@@ -4,6 +4,10 @@
 
 CUBIC STYLEさんが制作されている、[ラズパイアドバンス拡張ボード](https://cubic-style.jp/rpa_exp/)を使用して、GBのROMを読み出すツールです。  
 
+## インストール
+
+https://github.com/mj-hd/gb-reader/releases リリースタブから、自分のRaspberry Piに適したバイナリファイルをダウンロードしてください。
+
 ## ビルド
 
 ### Raspberry Pi上でビルド
