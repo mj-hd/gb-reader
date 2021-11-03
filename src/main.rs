@@ -1,6 +1,6 @@
 use anyhow::Result;
 use clap::{AppSettings, Clap};
-use gb_reader::{board::CubicStyleBoard, mbc::new_mbc_reader};
+use gb_reader::{board::CubicStyleBoard, mbc::new_mbc_reader, mbc::new_repl_mbc_reader};
 use indicatif::{HumanBytes, ProgressBar, ProgressStyle};
 use std::fs::File;
 use std::io::{Read as _, Write as _};
@@ -23,18 +23,25 @@ enum SubCommand {
 struct Read {
     #[clap(short, long)]
     output: String,
+
+    #[clap(short, long)]
+    repl: bool,
 }
 
-fn read_rom(output: String) -> Result<()> {
+fn read_rom(output: String, repl: bool) -> Result<()> {
     println!("[0/4] 拡張ボードの初期化中...");
     let mut board = CubicStyleBoard::new()?;
 
     println!("[1/4] ROMヘッダの解析中...");
-    let (mut reader, header) = new_mbc_reader(&mut board)?;
+    let (mut reader, header) = if repl {
+        new_repl_mbc_reader(&mut board)?
+    } else {
+        new_mbc_reader(&mut board)?
+    };
 
     println!(
         "タイトル: {}, MBC: {:?}, ROMサイズ: {}",
-        str::from_utf8(&header.title[..])?,
+        str::from_utf8(&header.title[..]).unwrap_or("ERR"),
         header.mbc_type,
         HumanBytes(header.rom_size as u64)
     );
@@ -81,7 +88,7 @@ fn main() {
     let opts: Opts = Opts::parse();
 
     let result = match opts.subcmd {
-        SubCommand::Read(t) => read_rom(t.output),
+        SubCommand::Read(t) => read_rom(t.output, t.repl),
     };
 
     result.unwrap();

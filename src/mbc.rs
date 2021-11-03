@@ -1,8 +1,9 @@
 use crate::board::CubicStyleBoard;
 use crate::rom::{MbcType, RomHeader};
 use anyhow::Result;
-use std::io;
-use std::io::{ErrorKind, Read, Seek, SeekFrom};
+use std::io::{stdin, ErrorKind, Read, Seek, SeekFrom};
+use std::time::Duration;
+use std::{io, thread};
 
 pub trait MbcReader: Read {
     fn size(&self) -> usize;
@@ -25,6 +26,10 @@ pub fn new_mbc_reader<'a>(
                 Box::new(Mbc1Reader::new(board, header))
             }
             MbcType::Mbc2 | MbcType::Mbc2Battery => Box::new(Mbc2Reader::new(board, header)),
+            MbcType::Mbc3
+            | MbcType::Mbc3Ram
+            | MbcType::Mbc3RamBattery
+            | MbcType::Mbc3TimerRamBattery => Box::new(Mbc3Reader::new(board, header)),
             MbcType::Mbc5
             | MbcType::Mbc5Ram
             | MbcType::Mbc5Rumble
@@ -36,6 +41,18 @@ pub fn new_mbc_reader<'a>(
         },
         header,
     ))
+}
+
+pub fn new_repl_mbc_reader<'a>(
+    board: &'a mut CubicStyleBoard,
+) -> Result<(Box<dyn MbcReader + 'a>, RomHeader)> {
+    let header = {
+        let mut reader = RomHeaderReader::new(board);
+
+        RomHeader::from_reader(&mut reader)
+    }?;
+
+    Ok((Box::new(ReplReader::new(board, header)), header))
 }
 
 pub struct RomHeaderReader<'a> {
@@ -476,5 +493,88 @@ impl<'a> Read for Mbc5Reader<'a> {
         }
 
         Ok(n)
+    }
+}
+
+pub struct ReplReader<'a> {
+    board: &'a mut CubicStyleBoard,
+
+    addr: u32,
+    size: usize,
+}
+
+impl<'a> MbcReader for ReplReader<'a> {
+    fn size(&self) -> usize {
+        self.size
+    }
+
+    fn status(&self) -> String {
+        format!("MANUAL {:#04X}", self.addr)
+    }
+}
+
+impl<'a> ReplReader<'a> {
+    pub fn new(board: &'a mut CubicStyleBoard, header: RomHeader) -> Self {
+        Self {
+            board,
+            addr: 0,
+            size: header.rom_size,
+        }
+    }
+}
+
+impl<'a> Read for ReplReader<'a> {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        loop {
+            let mut cmd = String::new();
+            let mut addr = String::new();
+
+            println!("");
+
+            println!("CMD?");
+            stdin().read_line(&mut cmd)?;
+
+            println!("ADDR?");
+            stdin().read_line(&mut addr)?;
+
+            let addr = u16::from_str_radix(&(addr.trim()), 16)
+                .map_err(|e| io::Error::new(ErrorKind::BrokenPipe, e))?;
+
+            match &(cmd.trim())[..] {
+                "R" => {
+                    self.board.set_addr(addr);
+
+                    let data = self
+                        .board
+                        .read_byte()
+                        .map_err(|e| io::Error::new(ErrorKind::BrokenPipe, e))?;
+
+                    println!("READ DATA: 0x{:04X} = {:02X}", addr, data);
+                }
+                "W" => {
+                    self.board.set_addr(addr);
+
+                    let mut value = String::new();
+
+                    println!("VAL?");
+                    stdin().read_line(&mut value)?;
+
+                    let val = u8::from_str_radix(&(value.trim()), 16)
+                        .map_err(|e| io::Error::new(ErrorKind::BrokenPipe, e))?;
+
+                    self.board
+                        .write_byte(val)
+                        .map_err(|e| io::Error::new(ErrorKind::BrokenPipe, e))?;
+
+                    println!("WRITE DATA: 0x{:04X} = {:02X}", addr, val);
+                }
+                "Q" => {
+                    return Ok(self.size());
+                }
+                _ => {
+                    println!("INVALID");
+                }
+            }
+        }
     }
 }

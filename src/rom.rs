@@ -19,6 +19,7 @@ pub enum MbcType {
     Mmm01 = 0x0b,
     Mmm01Ram = 0x0c,
     Mmm01RamBattery = 0x0d,
+    Mbc3TimerRamBattery = 0x10,
     Mbc3 = 0x11,
     Mbc3Ram = 0x12,
     Mbc3RamBattery = 0x13,
