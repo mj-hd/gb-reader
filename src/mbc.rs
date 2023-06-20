@@ -32,6 +32,7 @@ pub fn new_mbc_reader<'a>(
             | MbcType::Mbc3TimerRamBattery => Box::new(Mbc3Reader::new(board, header)),
             MbcType::Mbc5
             | MbcType::Mbc5Ram
+            | MbcType::Mbc5RamBattery
             | MbcType::Mbc5Rumble
             | MbcType::Mbc5RumbleRam
             | MbcType::Mbc5RumbleRamBattery => Box::new(Mbc5Reader::new(board, header)),
